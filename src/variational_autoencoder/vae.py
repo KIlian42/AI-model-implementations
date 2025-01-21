@@ -8,6 +8,8 @@ from dataset.mnist_loader import MnistDataset
 
 from tqdm import tqdm
 
+import cv2
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class VAE(nn.Module):
@@ -105,7 +107,19 @@ def train_vae():
             im = im.float().to(device)
             optimizer.zero.grad()
             mean, log_var, out = model(im)
-            # TODO
+            
+            cv2.imwrite('input.jpeg',  255 * ((im + 1) / 2).detach().cpu().numpy()[0, 0])
+            cv2.imwrite('output.jpeg', 255 * ((out + 1) / 2).detach().cpu().numpy()[0, 0])
+
+            kl_loss = torch.mean(0.5 * torch.sum(torch.exp(log_var) + mean**2-1-log_var, dim=-1))
+            recon_loss = criterion(out, im)
+            loss = recon_loss + 0.0001 * kl_loss
+            recon_losses.append(recon_loss.item())
+            losses.append(loss.item())
+            kl_losses.append(kl_loss.item())
+            loss.backward()
+            optimizer.step()
+            
 
 if __name__ == "__main__":
     train_vae()

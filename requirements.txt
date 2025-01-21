@@ -3,3 +3,4 @@ torchvision
 matplotlib
 numpy<2
 tqdm
+opencv-python

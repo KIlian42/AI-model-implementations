@@ -66,8 +66,8 @@ def main():
 
     def get_batch(split):
         data = train_data if split == 'train' else test_data
-        ix = torch.randint(len(data) - BLOCK_SIZE, (BATCH_SIZE,))
-        x = torch.stack([data[i:i+BLOCK_SIZE] for i in ix])
+        ix = torch.randint(len(data) - BLOCK_SIZE, (BATCH_SIZE,)) # ix gets BATCH_SIZE different indices in the data assigned
+        x = torch.stack([data[i:i+BLOCK_SIZE] for i in ix]) # Stack Tensors as rows for batch
         y = torch.stack([data[i+1:i+BLOCK_SIZE+1] for i in ix])
         return x, y
     
@@ -81,8 +81,30 @@ def main():
             target = yb[b, t]
             print(f'When input is {context.tolist()} the target is: {target}')
     
-    # TODO: Implement model
+
+    class BiagramLanguageModel(nn.Module):
+        def __init__(self, vocab_size):
+            super().__init__()
+            # Each token directly reads off the logits for the next token from a lookup table
+            self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
+
+        def forward(self, idx, targets=None):
+            # idx and targets are both (B, T) tensor of integers
+            logits = self.token_embedding_table(idx) # (B, T, C): (Batch, Time, Channel) where Channel = EMBEDDING_DIMENSION
+
+            if targets is None:
+                loss = None
+            else:
+                B, T, C = logits.shape
+                logits = logits.view(B*T, C) # .view reshapes the tensor
+                targets = targets.view(B*T)
+                loss = F.cross_entropy(logits, targets)
+            
+            return logits, loss
     
+    m = BiagramLanguageModel(VOCAB_SIZE)
+    logits, loss = m(xb, yb)
+    print(logits.shape)
 
 
 

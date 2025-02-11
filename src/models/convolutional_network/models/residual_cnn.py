@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 # ---------------------------------------------------------------
 # Residual Block
@@ -35,7 +36,7 @@ class ResidualBlock(nn.Module):
 
 
 # ---------------------------------------------------------------
-# Residual CNN original
+# Residual CNN
 # ---------------------------------------------------------------
 class ResidualCNN(nn.Module):
     def __init__(self):
@@ -65,43 +66,23 @@ class ResidualCNN(nn.Module):
 
 
 # ---------------------------------------------------------------
-# Residual Block für vollständig verbundene (FC) Schichten
+# Latent CNN
 # ---------------------------------------------------------------
-class ResidualBlockFC(nn.Module):
-    def __init__(self, features: int, hidden_features: int = None):
-        """
-        Ein Residual Block für Fully Connected Netzwerke.
-        """
-        super(ResidualBlockFC, self).__init__()
-        if hidden_features is None:
-            hidden_features = features
-        self.fc1 = nn.Linear(features, hidden_features)
+class LatentCNN(nn.Module):
+    def __init__(self):
+        super(LatentCNN, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=16, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, padding=1)
+        self.fc = nn.Linear(32 * 4 * 4, 10)
         self.relu = nn.ReLU(inplace=True)
-        self.fc2 = nn.Linear(hidden_features, features)
+        self.max_pool2d = nn.MaxPool2d(kernel_size=2)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        identity = x
-        out = self.fc1(x)
-        out = self.relu(out)
-        out = self.fc2(out)
-        out += identity
-        out = self.relu(out)
-        return out
-
-
-# ---------------------------------------------------------------
-# Klassifizierer für den latenten Raum (64-dim Vektor)
-# ---------------------------------------------------------------
-class LatentClassifier(nn.Module):
-    def __init__(self, in_features: int = 64, num_classes: int = 10, num_blocks: int = 4):
-        super(LatentClassifier, self).__init__()
-        self.initial_fc = nn.Linear(in_features, in_features)
-        # Erzeuge 'num_blocks' Residual Blöcke
-        self.res_blocks = nn.Sequential(*[ResidualBlockFC(in_features) for _ in range(num_blocks)])
-        self.fc = nn.Linear(in_features, num_classes)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.initial_fc(x)
-        x = self.res_blocks(x)
+    def forward(self, x):
+        x = x.view(-1, 1, 8, 8)
+        x = self.conv1(x)
+        x = self.relu(x)
+        x = self.conv2(x)
+        x = self.relu(x)
+        x = x.view(x.size(0), -1)
         x = self.fc(x)
         return x

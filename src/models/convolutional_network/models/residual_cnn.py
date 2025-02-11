@@ -37,9 +37,9 @@ class ResidualBlock(nn.Module):
 # ---------------------------------------------------------------
 # Residual CNN original
 # ---------------------------------------------------------------
-class ResidualCNNC(nn.Module):
+class ResidualCNN(nn.Module):
     def __init__(self):
-        super(ResidualCNNC, self).__init__()
+        super(ResidualCNN, self).__init__()
         self.conv1 = nn.Conv2d(1, 16, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(16)
         self.relu = nn.ReLU(inplace=True)

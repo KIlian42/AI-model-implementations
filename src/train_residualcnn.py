@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 import torch.optim as optim
-from ..convolutional_network.models.residual_cnn_mnist import ResidualCNNClassifier
+from models.convolutional_network.models.residual_cnn import ResidualCNN
 from util.print_model_architecture import print_layer_shapes
 from util.mnist_dataloader import load_mnist_dataset
 
@@ -20,14 +20,12 @@ if __name__ == "__main__":
         for batch_idx, batch in enumerate(train_loader):
             imgs = batch["image"]    # Shape: [Batch, 1, 28, 28]
             labels = batch["label"]  # Shape: [Batch]
-            
-            # Forward-Pass: Logits mit Shape [Batch, 10]
-            outputs = model(imgs)
-            
-            # Berechne den Loss mit CrossEntropyLoss
+        
+            # Forward pass
+            outputs = model(imgs)    
             loss = criterion(outputs, labels)
             
-            # Backward-Pass und Optimierung
+            # Backward pass
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()

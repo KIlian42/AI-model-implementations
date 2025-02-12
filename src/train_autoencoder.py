@@ -6,16 +6,16 @@ from util.print_model_architecture import print_layer_shapes
 from util.mnist_dataloader import load_mnist_dataset
 from tqdm import tqdm
 
+NUM_EPOCHS = 5 
+
 if __name__ == "__main__":
     train_loader, test_loader = load_mnist_dataset()
     model = Autoencoder()
-    dummy_input = torch.randn(1, 1, 28, 28) # (Batch, Channels, Width, Height)
-    print_layer_shapes(model, dummy_input)
+    # dummy_input = torch.randn(1, 1, 28, 28) # (Batch, Channels, Width, Height)
+    # print_layer_shapes(model, dummy_input)
 
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
-
-    NUM_EPOCHS = 5 
 
     for epoch in range(NUM_EPOCHS):
         progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{NUM_EPOCHS}", unit="batch")

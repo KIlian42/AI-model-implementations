@@ -1,127 +1,67 @@
 import torch
-from torch import nn
-from torch.nn import functional as F
-from torch.utils.data.dataloader import DataLoader
-from torch.optim import Adam
+import torch.nn as nn
+import torch.nn.functional as F
 
-from dataset.mnist_loader import MnistDataset
+class VariationalAutoencoder(nn.Module):
+    def __init__(self, latent_dim=64):
+        super(VariationalAutoencoder, self).__init__()
+        self.latent_dim = latent_dim
+        self.dropout = nn.Dropout(0.2)
+        
+        self.encoder_fc1 = nn.Linear(28 * 28, 128)
+        self.encoder_bn1 = nn.BatchNorm1d(128)
+        self.encoder_fc2 = nn.Linear(128, 64)
+        self.encoder_bn2 = nn.BatchNorm1d(64)
 
-from tqdm import tqdm
+        self.fc_mean = nn.Linear(64, latent_dim)
+        self.fc_logvar = nn.Linear(64, latent_dim)
+        
+        self.decoder_fc1 = nn.Linear(latent_dim, 64)
+        self.decoder_bn1 = nn.BatchNorm1d(64)
+        self.decoder_fc2 = nn.Linear(64, 128)
+        self.decoder_bn2 = nn.BatchNorm1d(128)
+        self.decoder_fc3 = nn.Linear(128, 28 * 28)
+    
+    def encode(self, x):
+        x = x.view(x.size(0), -1) # [Batch, 1, 28, 28] → [Batch, 784]
+        h = self.encoder_fc1(x)
+        h = self.encoder_bn1(h)
+        h = F.relu(h)
+        h = self.dropout(h)
+        h = self.encoder_fc2(h)
+        h = self.encoder_bn2(h)
+        h = F.relu(h)
+        h = self.dropout(h)
+        mu = self.fc_mean(h)
+        logvar = self.fc_logvar(h)
+        return mu, logvar
 
-import cv2
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std) # Sample
+        return mu + eps * std
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-class VAE(nn.Module):
-    """
-    Description:
-    ----
-    Very simple Variational Autoencoder model class for the MNIST dataset.
-
-    Args:
-    ----
-        Original images (PyTorch.Tensor): Tensor of shape (Batch, 1, 28, 28).
-
-    Returns:
-    ----
-        Reconstruced images (PyTorch.Tensor): Tensor of shape (Batch, 1, 28, 28).
-
-    Raises:
-    ----
-        /
-    """
-
-    def __init__(self):
-        super().__init__()
-
-        self.encoder = nn.Sequential(
-            nn.Linear(28*28, 196),
-            nn.Tanh(),
-            nn.Linear(196, 48),
-            nn.Tanh()
-        )
-
-        self.mean = nn.Sequential(
-            nn.Linear(48, 16),
-            nn.Tanh(),
-            nn.Linear(16, 2)
-        )
-
-        self.log_variance = nn.Sequential(
-            nn.Linear(48, 16),
-            nn.Tanh(),
-            nn.Linear(16, 2)
-        )
-
-        self.decoder = nn.Sequential(
-            nn.Linear(2, 16),
-            nn.Tanh(),
-            nn.Linear(16, 48),
-            nn.Tanh(),
-            nn.Linear(48, 196),
-            nn.Tanh(),
-            nn.Linear(196, 28*28),
-        )
+    def decode(self, z):
+        h = self.decoder_fc1(z)
+        h = self.decoder_bn1(h)
+        h = F.relu(h)
+        h = self.dropout(h)
+        h = self.decoder_fc2(h)
+        h = self.decoder_bn2(h)
+        h = F.relu(h)
+        h = self.dropout(h)
+        out = self.decoder_fc3(h)
+        out = torch.sigmoid(out)  # Normalize → [0, 1]
+        out = out.view(-1, 1, 28, 28)
+        return out
 
     def forward(self, x):
-        mean, log_variance = self.encode(x)
-        z = self.sample(mean, log_variance)
-        out = self.decode(z)
-        return out
+        mu, logvar = self.encode(x)
+        z = self.reparameterize(mu, logvar)
+        decoded = self.decode(z)
+        return decoded, mu, logvar
 
-    def encode(self, x):
-        out = self.encode(torch.flatten(x, start_dim=1))
-        mean = self.mean(out)
-        log_variance = self.log_variance(out)
-        return mean, log_variance
-
-    def sample(self, mean, log_variance):
-        std = torch.exp(0.5 * log_variance)
-        z = torch.randn_like(std)
-        z = z * std + mean
+    def get_latent(self, x):
+        mu, logvar = self.encode(x)
+        z = self.reparameterize(mu, logvar)
         return z
-    
-    def decode(self, z):
-        out = self.decoder(z)
-        out = out.reshape((z.size(0), 1, 28, 28))
-        return out
-    
-def train_vae():
-    # Create dataset and data loader
-    mnist = MnistDataset("train", im_path="data/train/images")
-    mnist_test = MnistDataset("test", im_path="data/test/images")
-    mnist_loader = DataLoader(mnist, batch_size=64, shuffle=True, num_workers=0)
-
-    model = VAE().to(device)
-
-    num_epochs = 10
-    optimizer = Adam(model.parameters(), lr=1E-3)
-    criterion = torch.nn.MSELoss()
-
-    recon_losses = []
-    kl_losses = []
-    losses = []
-
-    for epoch_idx in range(num_epochs):
-        for im, label in tqdm(mnist_loader):
-            im = im.float().to(device)
-            optimizer.zero.grad()
-            mean, log_var, out = model(im)
-            
-            cv2.imwrite('input.jpeg',  255 * ((im + 1) / 2).detach().cpu().numpy()[0, 0])
-            cv2.imwrite('output.jpeg', 255 * ((out + 1) / 2).detach().cpu().numpy()[0, 0])
-
-            kl_loss = torch.mean(0.5 * torch.sum(torch.exp(log_var) + mean**2-1-log_var, dim=-1))
-            recon_loss = criterion(out, im)
-            loss = recon_loss + 0.0001 * kl_loss
-            recon_losses.append(recon_loss.item())
-            losses.append(loss.item())
-            kl_losses.append(kl_loss.item())
-            loss.backward()
-            optimizer.step()
-            
-
-if __name__ == "__main__":
-    train_vae()
-
-

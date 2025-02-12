@@ -3,24 +3,26 @@ from torch import Tensor
 
 def print_layer_shapes(model: nn.Module, input_tensor: Tensor) -> None:
     """
-    Registriert Hooks in jedem Modul des Models, um während eines Forward-Passes
-    die Eingabe- und Ausgabeformen auszugeben. Die Ergebnisse werden anschließend
-    formatiert in einer Tabelle ausgegeben.
+    Registriert Hooks in jedem relevanten Modul des Models, um während eines Forward-Passes
+    die Eingabe- und Ausgabeformen sowie die Anzahl der Parameter auszugeben. Anschließend
+    wird eine Tabelle mit den Ergebnissen formatiert ausgegeben und die Gesamtanzahl der Parameter angezeigt.
 
     Args:
         model (nn.Module): Das PyTorch-Modell, dessen Layer-Formen ausgegeben werden sollen.
         input_tensor (Tensor): Ein Dummy-Eingabetensor, der dem Modell übergeben wird.
     """
-    results = []  # Liste zum Speichern der Ergebnisse als Tuple: (Layer-Name, Input Shape, Output Shape)
+    results = []  # Liste zum Speichern der Ergebnisse als Tuple:
+                  # (Layer-Name, Input Shape, Output Shape, Parameteranzahl)
 
     def hook_fn(module: nn.Module, input, output) -> None:
         module_name = module.__class__.__name__
         in_shape = input[0].shape if isinstance(input, (tuple, list)) else input.shape
         out_shape = output.shape if not isinstance(output, (tuple, list)) else output[0].shape
-        # Ergebnisse als Strings speichern
-        results.append((module_name, str(in_shape), str(out_shape)))
+        # Anzahl der Parameter im Modul ermitteln
+        param_count = sum(p.numel() for p in module.parameters())
+        results.append((module_name, str(in_shape), str(out_shape), param_count))
 
-    # Registriere Hooks für alle relevanten Module (außer Container wie nn.Sequential und das Modell selbst)
+    # Registriere Hooks für alle relevanten Module (außer Container wie nn.Sequential und dem Modell selbst)
     hooks = []
     for module in model.modules():
         if not isinstance(module, nn.Sequential) and module != model:
@@ -34,29 +36,36 @@ def print_layer_shapes(model: nn.Module, input_tensor: Tensor) -> None:
         hook.remove()
 
     # --- Ausgabe formatieren ---
-
-    # Definiere Header
-    header = ("Layer", "Input Shape", "Output Shape")
+    # Header definieren
+    header = ("Layer", "Input Shape", "Output Shape", "Param #")
     # Berechne die maximale Breite pro Spalte (zwischen Header und allen Ergebnissen)
     col_widths = [
         max(len(header[0]), max((len(row[0]) for row in results), default=0)),
         max(len(header[1]), max((len(row[1]) for row in results), default=0)),
-        max(len(header[2]), max((len(row[2]) for row in results), default=0))
+        max(len(header[2]), max((len(row[2]) for row in results), default=0)),
+        max(len(header[3]), max((len(str(row[3])) for row in results), default=0))
     ]
-    # Gesamtbreite der Tabelle (zusätzliche Leerzeichen und Spaltentrennung berücksichtigen)
-    total_width = sum(col_widths) + 8
+    # Gesamtbreite der Tabelle: Für 4 Spalten gibt es 3 Trennzeichen (hier "    " => 4 Leerzeichen)
+    total_width = sum(col_widths) + 3 * 4
 
     # Dekorierter Header der Tabelle
     print("=" * total_width)
     print("Layer Output Overview".center(total_width))
     print("=" * total_width)
     # Headerzeile
-    print(f"{header[0]:<{col_widths[0]}}    {header[1]:<{col_widths[1]}}    {header[2]:<{col_widths[2]}}")
+    print(f"{header[0]:<{col_widths[0]}}    {header[1]:<{col_widths[1]}}    "
+          f"{header[2]:<{col_widths[2]}}    {header[3]:<{col_widths[3]}}")
     print("-" * total_width)
     # Ausgabe jeder Zeile
-    for layer_name, in_shape, out_shape in results:
-        print(f"{layer_name:<{col_widths[0]}}    {in_shape:<{col_widths[1]}}    {out_shape:<{col_widths[2]}}")
+    for layer_name, in_shape, out_shape, param_count in results:
+        print(f"{layer_name:<{col_widths[0]}}    {in_shape:<{col_widths[1]}}    "
+              f"{out_shape:<{col_widths[2]}}    {param_count:<{col_widths[3]}}")
     print("=" * total_width)
+
+    # Gesamtsumme aller Parameter des Modells (unabhängig von den Hooks)
+    total_params = sum(p.numel() for p in model.parameters())
+    total_params_str = f"{total_params:,}".replace(",", ".")
+    print(f"Total Parameters: {total_params_str}")
 
 
 # --- Beispiel: Anwendung der Funktion ---
